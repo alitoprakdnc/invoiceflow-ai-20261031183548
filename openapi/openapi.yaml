@@ -1,0 +1,894 @@
+openapi: 3.0.3
+info:
+  title: InvoiceFlow AI API
+  description: |
+    InvoiceFlow AI is a SaaS platform that automates ingestion, OCR, LLM‑enhanced extraction and categorisation of invoices, receipts and other financial documents.  
+    This OpenAPI 3.0 specification describes all public HTTP endpoints, request/response payloads, authentication, error handling and example data.
+  version: 1.0.0
+  contact:
+    name: InvoiceFlow AI Team
+    url: https://github.com/invoiceflow-ai
+    email: support@invoiceflow.ai
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+  - url: https://api.invoiceflow.ai
+    description: Production API
+tags:
+  - name: Auth
+    description: Authentication and token management
+  - name: Invoices
+    description: CRUD, upload and processing of financial documents
+  - name: Webhooks
+    description: Management of outbound webhook endpoints
+  - name: Health
+    description: Service health and readiness checks
+  - name: Monitoring
+    description: GitHub Actions queue monitoring
+  - name: Metrics
+    description: Prometheus metrics endpoint
+paths:
+  /api/auth/login:
+    post:
+      tags:
+        - Auth
+      summary: Authenticate a user and obtain a JWT
+      requestBody:
+        description: Credentials for login
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            examples:
+              user:
+                summary: Typical login request
+                value:
+                  email: alice@example.com
+                  password: secret123
+      responses:
+        '200':
+          description: Successful authentication
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+              examples:
+                token:
+                  summary: JWT token response
+                  value:
+                    access_token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                    token_type: Bearer
+                    expires_in: 3600
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/auth/refresh:
+    post:
+      tags:
+        - Auth
+      summary: Refresh an expired JWT using a refresh token
+      security:
+        - BearerAuth: []
+      requestBody:
+        description: Refresh token payload
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+            examples:
+              refresh:
+                summary: Refresh token example
+                value:
+                  refresh_token: dGhpcy1pcy1hLXJlZnJlc2gtdG9rZW4
+      responses:
+        '200':
+          description: New access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/health:
+    get:
+      tags:
+        - Health
+      summary: Liveness, readiness and queue depth status
+      operationId: getHealth
+      responses:
+        '200':
+          description: Health status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              examples:
+                healthy:
+                  summary: Healthy system
+                  value:
+                    status: ok
+                    uptime_seconds: 123456
+                    database:
+                      reachable: true
+                      latency_ms: 3
+                    redis:
+                      reachable: true
+                      latency_ms: 1
+                    task_queue:
+                      depth: 2
+        '503':
+          description: Service unavailable (readiness failure)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/metrics:
+    get:
+      tags:
+        - Metrics
+      summary: Prometheus metrics endpoint
+      operationId: getMetrics
+      responses:
+        '200':
+          description: Plain‑text metrics
+          content:
+            text/plain:
+              schema:
+                type: string
+  /api/invoices:
+    get:
+      tags:
+        - Invoices
+      summary: List invoices visible to the caller
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PageNumber'
+        - $ref: '#/components/parameters/PageSize'
+        - name: status
+          in: query
+          description: Filter by processing status
+          required: false
+          schema:
+            type: string
+            enum: [uploaded, processing, completed, failed]
+      responses:
+        '200':
+          description: Paginated list of invoices
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags:
+        - Invoices
+      summary: Create a new invoice record (metadata only)
+      security:
+        - BearerAuth: []
+      requestBody:
+        description: Invoice metadata
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvoiceCreateRequest'
+            examples:
+              minimal:
+                summary: Minimal metadata
+                value:
+                  vendor_name: Acme Corp
+                  invoice_date: '2024-09-01'
+                  due_date: '2024-09-30'
+                  currency: USD
+      responses:
+        '201':
+          description: Invoice created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/invoices/{invoiceId}:
+    parameters:
+      - $ref: '#/components/parameters/InvoiceId'
+    get:
+      tags:
+        - Invoices
+      summary: Retrieve a single invoice with extraction results
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Invoice details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags:
+        - Invoices
+      summary: Update mutable invoice fields
+      security:
+        - BearerAuth: []
+      requestBody:
+        description: Fields to update
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvoiceUpdateRequest'
+      responses:
+        '200':
+          description: Updated invoice
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags:
+        - Invoices
+      summary: Delete an invoice (soft‑delete)
+      security:
+        - BearerAuth: []
+      responses:
+        '204':
+          description: Invoice deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/invoices/{invoiceId}/upload:
+    post:
+      tags:
+        - Invoices
+      summary: Upload a PDF/JPEG/PNG document for processing
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/InvoiceId'
+      requestBody:
+        description: Multipart file upload
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: PDF, JPEG or PNG document (max 10 MiB)
+      responses:
+        '202':
+          description: Upload accepted, processing queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '413':
+          $ref: '#/components/responses/RequestEntityTooLarge'
+  /api/invoices/{invoiceId}/status:
+    get:
+      tags:
+        - Invoices
+      summary: Get current processing status of an invoice
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/InvoiceId'
+      responses:
+        '200':
+          description: Current status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceStatusResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/webhooks:
+    get:
+      tags:
+        - Webhooks
+      summary: List webhook endpoints configured by the caller
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of webhook endpoints
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags:
+        - Webhooks
+      summary: Register a new outbound webhook endpoint
+      security:
+        - BearerAuth: []
+      requestBody:
+        description: Webhook endpoint definition
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebhookCreateRequest'
+            examples:
+              example:
+                summary: Basic webhook
+                value:
+                  url: https://example.com/invoice-callback
+                  secret: super-secret-key
+                  events:
+                    - invoice.completed
+                    - invoice.failed
+      responses:
+        '201':
+          description: Webhook created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/webhooks/{webhookId}:
+    parameters:
+      - $ref: '#/components/parameters/WebhookId'
+    get:
+      tags:
+        - Webhooks
+      summary: Retrieve a single webhook endpoint
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Webhook details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags:
+        - Webhooks
+      summary: Update webhook configuration (url, secret, events, enabled)
+      security:
+        - BearerAuth: []
+      requestBody:
+        description: Fields to update
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebhookUpdateRequest'
+      responses:
+        '200':
+          description: Updated webhook
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags:
+        - Webhooks
+      summary: Delete a webhook endpoint
+      security:
+        - BearerAuth: []
+      responses:
+        '204':
+          description: Webhook deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/monitor/github-actions:
+    get:
+      tags:
+        - Monitoring
+      summary: Retrieve current GitHub Actions queue starvation metrics
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Queue metrics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GitHubActionsMetrics'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    InvoiceId:
+      name: invoiceId
+      in: path
+      required: true
+      description: UUID of the invoice
+      schema:
+        type: string
+        format: uuid
+    WebhookId:
+      name: webhookId
+      in: path
+      required: true
+      description: UUID of the webhook endpoint
+      schema:
+        type: string
+        format: uuid
+    PageNumber:
+      name: page
+      in: query
+      description: Page number (starting at 1)
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSize:
+      name: page_size
+      in: query
+      description: Number of items per page
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+  responses:
+    BadRequest:
+      description: Invalid request payload or parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Authentication required or token invalid/expired
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    RequestEntityTooLarge:
+      description: Uploaded file exceeds size limits
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    # Authentication
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          example: alice@example.com
+        password:
+          type: string
+          format: password
+          example: secret123
+    RefreshRequest:
+      type: object
+      required:
+        - refresh_token
+      properties:
+        refresh_token:
+          type: string
+          example: dGhpcy1pcy1hLXJlZnJlc2gtdG9rZW4
+    LoginResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+          description: JWT signed with server secret
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        token_type:
+          type: string
+          enum: [Bearer]
+          default: Bearer
+        expires_in:
+          type: integer
+          description: Seconds until token expiration
+          example: 3600
+        refresh_token:
+          type: string
+          description: Long‑lived token used to obtain new access tokens
+          example: dGhpcy1pcy1hLXJlZnJlc2gtdG9rZW4
+    # Health
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded, down]
+          example: ok
+        uptime_seconds:
+          type: integer
+          example: 123456
+        database:
+          type: object
+          properties:
+            reachable:
+              type: boolean
+              example: true
+            latency_ms:
+              type: integer
+              example: 3
+        redis:
+          type: object
+          properties:
+            reachable:
+              type: boolean
+              example: true
+            latency_ms:
+              type: integer
+              example: 1
+        task_queue:
+          type: object
+          properties:
+            depth:
+              type: integer
+              description: Number of pending tasks
+              example: 2
+    # Errors
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Short error code
+          example: invalid_request
+        message:
+          type: string
+          description: Human readable description
+          example: The supplied JSON payload is malformed.
+        details:
+          type: object
+          additionalProperties: true
+    # Invoice
+    InvoiceCreateRequest:
+      type: object
+      required:
+        - vendor_name
+        - invoice_date
+        - currency
+      properties:
+        vendor_name:
+          type: string
+          example: Acme Corp
+        invoice_date:
+          type: string
+          format: date
+          example: '2024-09-01'
+        due_date:
+          type: string
+          format: date
+          example: '2024-09-30'
+        currency:
+          type: string
+          description: ISO 4217 currency code
+          example: USD
+        notes:
+          type: string
+          maxLength: 500
+          example: Project XYZ – Phase 2
+    InvoiceUpdateRequest:
+      type: object
+      properties:
+        vendor_name:
+          type: string
+        due_date:
+          type: string
+          format: date
+        notes:
+          type: string
+        status:
+          type: string
+          enum: [uploaded, processing, completed, failed]
+    InvoiceResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+        vendor_name:
+          type: string
+        invoice_date:
+          type: string
+          format: date
+        due_date:
+          type: string
+          format: date
+        currency:
+          type: string
+        status:
+          type: string
+          enum: [uploaded, processing, completed, failed]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        extraction_result:
+          $ref: '#/components/schemas/ExtractionResult'
+    InvoiceListResponse:
+      type: object
+      properties:
+        total:
+          type: integer
+          example: 124
+        page:
+          type: integer
+          example: 1
+        page_size:
+          type: integer
+          example: 20
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/InvoiceResponse'
+    InvoiceStatusResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [uploaded, processing, completed, failed]
+        progress:
+          type: integer
+          description: Percentage of pipeline completed (0‑100)
+          example: 73
+        last_error:
+          type: string
+          nullable: true
+          example: OCR failed – unreadable image
+    UploadResponse:
+      type: object
+      properties:
+        invoice_id:
+          type: string
+          format: uuid
+        message:
+          type: string
+          example: File accepted and queued for processing.
+    ExtractionResult:
+      type: object
+      description: Structured data extracted from the document
+      properties:
+        raw_text:
+          type: string
+          description: Full OCR output
+        vendor:
+          type: string
+          example: Acme Corp
+        invoice_number:
+          type: string
+          example: INV-2024-00123
+        invoice_date:
+          type: string
+          format: date
+          example: '2024-09-01'
+        due_date:
+          type: string
+          format: date
+          example: '2024-09-30'
+        total_amount:
+          type: number
+          format: float
+          example: 1245.67
+        currency:
+          type: string
+          example: USD
+        line_items:
+          type: array
+          items:
+            type: object
+            properties:
+              description:
+                type: string
+                example: Consulting services – September
+              quantity:
+                type: number
+                format: float
+                example: 1
+              unit_price:
+                type: number
+                format: float
+                example: 1245.67
+              amount:
+                type: number
+                format: float
+                example: 1245.67
+        taxes:
+          type: array
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+                example: VAT
+              rate:
+                type: number
+                format: float
+                example: 0.2
+              amount:
+                type: number
+                format: float
+                example: 249.13
+    # Webhooks
+    WebhookCreateRequest:
+      type: object
+      required:
+        - url
+        - secret
+        - events
+      properties:
+        url:
+          type: string
+          format: uri
+          example: https://example.com/webhook
+        secret:
+          type: string
+          description: Shared secret used for HMAC signing
+          example: super-secret-key
+        events:
+          type: array
+          description: List of events that trigger the webhook
+          items:
+            type: string
+            enum:
+              - invoice.uploaded
+              - invoice.processing
+              - invoice.completed
+              - invoice.failed
+        enabled:
+          type: boolean
+          default: true
+    WebhookUpdateRequest:
+      type: object
+      properties:
+        url:
+          type: string
+          format: uri
+        secret:
+          type: string
+        events:
+          type: array
+          items:
+            type: string
+            enum:
+              - invoice.uploaded
+              - invoice.processing
+              - invoice.completed
+              - invoice.failed
+        enabled:
+          type: boolean
+    WebhookResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: d2c5e8f9-9b2a-4a6c-9f3e-2e5b6c9d8a1b
+        url:
+          type: string
+          format: uri
+        events:
+          type: array
+          items:
+            type: string
+        enabled:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    WebhookListResponse:
+      type: object
+      properties:
+        total:
+          type: integer
+          example: 3
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/WebhookResponse'
+    # Monitoring
+    GitHubActionsMetrics:
+      type: object
+      properties:
+        organization:
+          type: string
+          example: my-org
+        total_queued_jobs:
+          type: integer
+          example: 12
+        oldest_job_age_seconds:
+          type: integer
+          example: 85
+        alert_threshold:
+          type: integer
+          description: Queue length that triggers Slack alert
+          example: 20
+    # Misc
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [admin, accountant, viewer]
+        created_at:
+          type: string
+          format: date-time
+        last_login:
+          type: string
+          format: date-time
+        is_active:
+          type: boolean
+          default: true
+externalDocs:
+  description: Full documentation and SDKs
+  url: https://docs.invoiceflow.ai
+security:
+  - BearerAuth: []

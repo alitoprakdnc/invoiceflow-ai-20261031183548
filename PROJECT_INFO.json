@@ -1,0 +1,251 @@
+{
+  "name": "InvoiceFlow AI",
+  "description": "A SaaS platform that automates the ingestion, OCR, AI‑enhanced extraction and categorisation of invoices, receipts and other financial documents. Users upload documents via a modern web UI or API; the system extracts line‑items, taxes, totals and vendor data using Tesseract OCR + a local LLM (Ollama) for fuzzy parsing, validates the data, stores it in a relational store and pushes structured results to downstream accounting systems through secure, HMAC‑signed webhooks. The product includes a full OpenAPI‑documented API, health‑check endpoints, role‑based access, audit logs and a built‑in monitor for GitHub Actions queue starvation for teams that run CI/CD pipelines on the same cloud project.",
+  "category": "FinTech / Document Automation / SaaS",
+  "technologies": [
+    "Go (Gin)",
+    "Python (FastAPI for LLM wrapper)",
+    "React + TypeScript",
+    "Tailwind CSS",
+    "PostgreSQL",
+    "Redis",
+    "Google Cloud Tasks (push queue)",
+    "Google Cloud Secret Manager",
+    "Tesseract OCR",
+    "Ollama (local LLM) / OpenAI compatible API",
+    "Docker & Docker‑Compose",
+    "Kubernetes (optional production)",
+    "OpenAPI 3.0"
+  ],
+  "target_users": [
+    "Small‑to‑medium enterprises (SMEs)",
+    "Accounting & finance teams",
+    "Freelance bookkeepers",
+    "Developers building integrations with ERP/accounting software"
+  ],
+  "problem": "Manual entry of invoice data is time‑consuming, error‑prone and costly. Existing solutions are either expensive, lock‑in to cloud‑only OCR services, or lack secure programmable hooks for downstream automation. Teams also struggle to monitor CI/CD pipeline health when using shared GitHub Actions resources.",
+  "features": [
+    "Secure multi‑user authentication (JWT) with role‑based permissions (admin, accountant, viewer).",
+    "Drag‑and‑drop document upload with client‑side preview and progress bar.",
+    "Automatic OCR via Tesseract, followed by LLM‑enhanced entity extraction (vendor, date, line items, taxes).",
+    "Configurable validation rules (e.g., total = sum(line items) ± tolerance).",
+    "Async processing pipeline powered by Google Cloud Tasks; status updates via WebSocket.",
+    "Audit log of every upload, extraction, validation and webhook dispatch.",
+    "Outbound webhook engine with constant‑time HMAC verification for receiving systems.",
+    "OpenAPI 3.0 spec with interactive Swagger UI (embedded via embed.FS).",
+    "Health‑check endpoint (/api/health) exposing liveness, readiness and queue depth.",
+    "Dashboard with charts (documents processed per day, error rates, webhook success).",
+    "GitHub Actions queue monitor that surfaces starvation metrics and alerts.",
+    "Admin UI for secret management integration with Google Secret Manager (API keys, LLM tokens).",
+    "Docker‑Compose for one‑click local development and CI pipelines."
+  ],
+  "architecture": "The system follows a modular micro‑service style while being deployable as a single Docker‑Compose stack for SaaS.\n\n- **API Gateway (Go/Gin)** – Handles authentication, request routing, health checks, OpenAPI serving, and forwards heavy‑weight jobs to the task queue.\n- **Task Queue (Google Cloud Tasks)** – Push‑based queue that triggers background workers for OCR and LLM extraction.\n- **OCR Service (Go)** – Wraps Tesseract, stores raw text in PostgreSQL.\n- **LLM Service (Python/FastAPI)** – Thin wrapper around Ollama (or OpenAI) that receives raw text, returns structured JSON, and signs responses.\n- **Webhook Dispatcher (Go)** – Sends POST requests to user‑configured endpoints, adds HMAC header, retries with exponential back‑off, logs outcomes.\n- **Data Layer (PostgreSQL + Redis)** – PostgreSQL stores users, documents, extracted entities, audit logs; Redis caches session tokens and queue metrics.\n- **Auth & RBAC (Go middleware)** – JWT validation, role checks, token revocation via Redis.\n- **Secret Manager Adapter (Go)** – Pulls API keys / LLM tokens from Google Secret Manager at startup.\n- **Monitoring Service (Go)** – Exposes Prometheus metrics, includes a GitHub Actions queue starvation detector that polls the GitHub API.\n- **Frontend (React/TS)** – SPA built with Vite, Tailwind, React‑Query for data fetching, Chart.js for dashboards, and WebSocket listener for job status.\n- **CI/CD** – GitHub Actions run unit, integration and Cypress e2e tests; the queue monitor helps teams spot bottlenecks.\n\nAll components are containerised; the production deployment can be split into separate pods/services on Kubernetes, but the dev environment runs with a single `docker-compose.yml`.",
+  "design_system": "A clean, premium SaaS look built on Tailwind CSS 3 with a custom design token set:\n- **Palette**: Primary #0A74DA, Secondary #14B8A6, Accent #F59E0B, Neutral greys from #F9FAFB to #111827.\n- **Typography**: Inter (400/500/600) for UI, Roboto Mono for code snippets.\n- **Spacing**: 4‑px base unit, consistent use of `space-x-4`, `p-6` etc.\n- **Components**: Card, Table, Modal, Dropzone, Badge, Toast, Loading Skeleton, Switch, Pagination.\n- **Interaction**: Subtle elevation (shadow‑md) on hover, focus rings, disabled opacity.\n- **Responsive**: Mobile‑first breakpoints (sm ≥640px, md ≥768px, lg ≥1024px). The dashboard collapses side‑nav into a hamburger on small screens; tables become scrollable.\n- **Accessibility**: ARIA labels, keyboard navigation, color contrast ≥4.5:1.\n- **Theming**: Light and dark mode toggled via CSS variables; persisted in localStorage.\nThe UI is built as reusable React components under `src/components/` and follows the atomic design principle, enabling rapid feature addition without visual regression.",
+  "testing": "Comprehensive testing strategy:\n- **Unit Tests**: Go `*_test.go` using `testing` + `testify`; Python tests with `pytest`; React component tests with Jest + React Testing Library.\n- **Integration Tests**: Go tests that spin up an in‑memory PostgreSQL (via `testcontainers`) and exercise API endpoints, including webhook signing.\n- **End‑to‑End Tests**: Cypress suite covering upload flow, OCR/LLM processing, dashboard filters, and webhook configuration.\n- **Static Analysis**: `golangci-lint`, `flake8`, `eslint` + `prettier`.\n- **CI Pipeline**: GitHub Actions run lint → unit → integration → Cypress on each PR; on merge, Docker images are built and pushed to a registry.\n- **Performance Tests**: Locust script (in `scripts/locustfile.py`) to simulate 100 concurrent uploads, ensuring queue depth stays under threshold.\n- **Security Tests**: OWASP ZAP scan against the dev deployment, plus unit tests for HMAC constant‑time verification.\nAll test artifacts are stored under `tests/` and `scripts/`.",
+  "files": [
+    {
+      "path": "backend/cmd/server/main.go",
+      "purpose": "Entry point for the Go API server; loads config, initializes logger, DB, Redis, queue, registers routes and starts HTTP server."
+    },
+    {
+      "path": "backend/internal/api/router.go",
+      "purpose": "Defines Gin router, groups routes (auth, invoices, webhooks, health), applies middleware (auth, logging, recovery)."
+    },
+    {
+      "path": "backend/internal/api/health.go",
+      "purpose": "Implements `/api/health` endpoint returning liveness, readiness, DB and queue status in JSON."
+    },
+    {
+      "path": "backend/internal/api/invoice.go",
+      "purpose": "Handlers for invoice CRUD, upload endpoint (multipart), status polling, and webhook subscription management."
+    },
+    {
+      "path": "backend/internal/auth/middleware.go",
+      "purpose": "Gin middleware that validates JWT, extracts user ID and role, stores in request context."
+    },
+    {
+      "path": "backend/internal/auth/jwt.go",
+      "purpose": "Utility functions to generate, sign, verify JWTs; reads signing key from Secret Manager."
+    },
+    {
+      "path": "backend/internal/service/ocr/ocr.go",
+      "purpose": "Wrapper around Tesseract CLI; receives file path, returns raw text, stores intermediate result in DB."
+    },
+    {
+      "path": "backend/internal/service/llm/llm.go",
+      "purpose": "HTTP client for the local LLM FastAPI service; sends raw OCR text, receives structured JSON, validates schema."
+    },
+    {
+      "path": "backend/internal/worker/task_processor.go",
+      "purpose": "Google Cloud Tasks handler; pulls task payload, runs OCR → LLM pipeline, updates invoice record, triggers webhook dispatch."
+    },
+    {
+      "path": "backend/internal/webhook/validation.go",
+      "purpose": "Generates constant‑time HMAC signature for outbound webhook payloads; verifies incoming webhook signatures for inbound callbacks."
+    },
+    {
+      "path": "backend/internal/queue/google_tasks.go",
+      "purpose": "Helper to create Cloud Tasks, set payload, schedule retries, and expose queue depth metrics."
+    },
+    {
+      "path": "backend/internal/repo/postgres.go",
+      "purpose": "Initialises GORM DB connection, runs migrations, provides helper for transaction handling."
+    },
+    {
+      "path": "backend/internal/repo/models.go",
+      "purpose": "GORM model definitions: User, Invoice, Document, ExtractionResult, WebhookEndpoint, AuditLog."
+    },
+    {
+      "path": "backend/internal/logger/logger.go",
+      "purpose": "Structured logger (zap) wrapper with request ID correlation and log level configuration."
+    },
+    {
+      "path": "backend/internal/config/config.go",
+      "purpose": "Loads configuration from environment variables, supports overrides via .env for local dev."
+    },
+    {
+      "path": "backend/internal/metrics/metrics.go",
+      "purpose": "Prometheus metrics collector: request latency, error counters, queue depth, webhook success/failure."
+    },
+    {
+      "path": "backend/internal/monitor/github_actions_monitor.go",
+      "purpose": "Periodically queries GitHub Actions API for the organization’s queue length; exposes metric and optional Slack alert webhook."
+    },
+    {
+      "path": "backend/internal/secret/manager.go",
+      "purpose": "Abstraction over Google Secret Manager; caches secrets in memory, provides GetSecret(name) method."
+    },
+    {
+      "path": "backend/internal/validation/validation.go",
+      "purpose": "Business‑level validation of extracted data (totals, dates, tax calculations) using go‑validator."
+    },
+    {
+      "path": "backend/internal/middleware/error_handler.go",
+      "purpose": "Centralized error handling middleware that maps custom errors to HTTP status codes and JSON error payloads."
+    },
+    {
+      "path": "migrations/001_init.sql",
+      "purpose": "Creates base tables: users, roles, audit_logs."
+    },
+    {
+      "path": "migrations/002_invoice_table.sql",
+      "purpose": "Creates invoices, documents, extraction_results, webhook_endpoints tables with foreign keys."
+    },
+    {
+      "path": "frontend/src/index.tsx",
+      "purpose": "React entry point; renders <App />, sets up React‑Query client and global error boundary."
+    },
+    {
+      "path": "frontend/src/App.tsx",
+      "purpose": "Root component; defines routing (React Router), layout (sidebar, header), and theme provider."
+    },
+    {
+      "path": "frontend/src/pages/Dashboard.tsx",
+      "purpose": "Dashboard page showing processing stats, charts (Chart.js), recent activity table."
+    },
+    {
+      "path": "frontend/src/pages/Invoices.tsx",
+      "purpose": "Paginated, filterable table of invoices; supports bulk actions and status badges."
+    },
+    {
+      "path": "frontend/src/pages/Upload.tsx",
+      "purpose": "Upload page with drag‑and‑drop component, progress bar, and immediate preview of selected files."
+    },
+    {
+      "path": "frontend/src/components/InvoiceTable.tsx",
+      "purpose": "Reusable table component displaying invoice rows, sortable columns, and inline status chips."
+    },
+    {
+      "path": "frontend/src/components/UploadDropzone.tsx",
+      "purpose": "Dropzone built with react-dropzone; validates file type/size, shows thumbnail previews."
+    },
+    {
+      "path": "frontend/src/components/Modal.tsx",
+      "purpose": "Generic modal dialog with focus trap, accessible ARIA attributes, and animation."
+    },
+    {
+      "path": "frontend/src/components/Chart.tsx",
+      "purpose": "Wrapper around Chart.js for line/bar charts used on the dashboard."
+    },
+    {
+      "path": "frontend/src/components/Toast.tsx",
+      "purpose": "Global toast notification system (auto‑dismiss, success/error types)."
+    },
+    {
+      "path": "frontend/src/hooks/useInvoices.ts",
+      "purpose": "Custom React‑Query hook that fetches invoices, supports pagination, filters, and refetch on mutation."
+    },
+    {
+      "path": "frontend/src/api/client.ts",
+      "purpose": "Axios instance with JWT interceptor, base URL from env, and automatic retry on 401 (token refresh)."
+    },
+    {
+      "path": "frontend/src/styles/tailwind.css",
+      "purpose": "Tailwind CSS entry file; imports base, components, utilities and custom theme extensions."
+    },
+    {
+      "path": "frontend/src/theme.ts",
+      "purpose": "Defines light/dark color tokens, provides context for theme switching, persists choice in localStorage."
+    },
+    {
+      "path": "frontend/vite.config.ts",
+      "purpose": "Vite configuration for React + TypeScript, includes alias for `@/` and environment variable handling."
+    },
+    {
+      "path": "config/docker-compose.yml",
+      "purpose": "Docker‑Compose definition for dev stack: backend, frontend, postgres, redis, tesseract‑ocr service, llm‑service (Python), and nginx reverse proxy."
+    },
+    {
+      "path": "config/Dockerfile.backend",
+      "purpose": "Multi‑stage Dockerfile that builds Go binary, copies migrations, and runs the server with non‑root user."
+    },
+    {
+      "path": "config/Dockerfile.frontend",
+      "purpose": "Builds React app with Vite, then serves static files via nginx (alpine)."
+    },
+    {
+      "path": "config/nginx.conf",
+      "purpose": "Nginx reverse‑proxy config: routes `/api/` to backend, serves SPA fallback, enables gzip and security headers."
+    },
+    {
+      "path": "config/.dockerignore",
+      "purpose": "Excludes node_modules, vendor, .git, and local dev files from Docker build context."
+    },
+    {
+      "path": "config/.gitignore",
+      "purpose": "Standard gitignore for Go, Node, VSCode, OS files, and env files."
+    },
+    {
+      "path": "openapi/openapi.yaml",
+      "purpose": "Complete OpenAPI 3.0 specification for all public endpoints, includes security scheme (Bearer JWT) and example payloads."
+    },
+    {
+      "path": "scripts/generate_openapi.sh",
+      "purpose": "Shell script that runs `swag init` (Go) and merges generated spec with manual docs, outputs to `openapi/openapi.yaml`."
+    },
+    {
+      "path": "scripts/seed_demo_data.go",
+      "purpose": "Go program that populates the database with demo users, sample invoices, and webhook endpoints for onboarding demos."
+    },
+    {
+      "path": "scripts/locustfile.py",
+      "purpose": "Locust load‑testing script simulating concurrent uploads and status polling for performance benchmarking."
+    },
+    {
+      "path": "tests/backend/api_test.go",
+      "purpose": "Integration tests for API routes using httptest server; covers auth, upload, health, and webhook signature verification."
+    },
+    {
+      "path": "tests/backend/service/ocr_test.go",
+      "purpose": "Unit tests for OCR wrapper; uses sample image fixtures and asserts extracted raw text."
+    },
+    {
+      "path": "tests/frontend/__tests__/InvoiceTable.test.tsx",
+      "purpose": "Jest + React Testing Library test ensuring table renders rows, sorting works, and status chips have correct colors."
+    },
+    {
+      "path": "tests/e2e/cypress/invoice_flow.spec.js",
+      "purpose": "Cypress end‑to‑end test: login, upload a PDF invoice, wait for processing, verify extracted data appears in UI, and webhook payload is sent (mocked)."
+    }
+  ]
+}

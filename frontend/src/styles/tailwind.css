@@ -1,0 +1,233 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* -------------------------------------------------------------------------- */
+/*                         Design System Variables                           */
+/* -------------------------------------------------------------------------- */
+:root {
+  /* Primary palette */
+  --color-primary-50: #e5f0ff;
+  --color-primary-100: #cce0ff;
+  --color-primary-200: #99c2ff;
+  --color-primary-300: #66a3ff;
+  --color-primary-400: #3385ff;
+  --color-primary-500: #0a74da;
+  --color-primary-600: #095bb5;
+  --color-primary-700: #07458f;
+  --color-primary-800: #053069;
+  --color-primary-900: #031c44;
+
+  /* Secondary & Accent */
+  --color-secondary-500: #14b8a6;
+  --color-accent-500: #f59e0b;
+
+  /* Neutral greys */
+  --color-neutral-50: #f9fafb;
+  --color-neutral-100: #f3f4f6;
+  --color-neutral-200: #e5e7eb;
+  --color-neutral-300: #d1d5db;
+  --color-neutral-400: #9ca3af;
+  --color-neutral-500: #6b7280;
+  --color-neutral-600: #4b5563;
+  --color-neutral-700: #374151;
+  --color-neutral-800: #1f2937;
+  --color-neutral-900: #111827;
+
+  /* Typography */
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    'Segoe UI', sans-serif;
+  --font-mono: 'Roboto Mono', ui-monospace, SFMono-Regular, Menlo, Monaco,
+    Consolas, 'Liberation Mono', 'Courier New', monospace;
+
+  /* Spacing base (4 px) */
+  --spacing-unit: 4px;
+}
+
+/* Dark mode overrides – keep the same hue but invert neutrals */
+[data-theme='dark'] {
+  --color-neutral-50: #111827;
+  --color-neutral-100: #1f2937;
+  --color-neutral-200: #374151;
+  --color-neutral-300: #4b5563;
+  --color-neutral-400: #6b7280;
+  --color-neutral-500: #9ca3af;
+  --color-neutral-600: #d1d5db;
+  --color-neutral-700: #e5e7eb;
+  --color-neutral-800: #f3f4f6;
+  --color-neutral-900: #f9fafb;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                               Base Styles                                 */
+/* -------------------------------------------------------------------------- */
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    color-scheme: light dark;
+  }
+
+  body {
+    @apply bg-neutral-50 dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100;
+  }
+
+  code,
+  pre {
+    font-family: var(--font-mono);
+  }
+
+  /* Headings – responsive, accessible */
+  h1 {
+    @apply text-4xl font-semibold text-neutral-900 dark:text-neutral-100;
+  }
+  h2 {
+    @apply text-3xl font-semibold text-neutral-900 dark:text-neutral-100;
+  }
+  h3 {
+    @apply text-2xl font-medium text-neutral-900 dark:text-neutral-100;
+  }
+  h4 {
+    @apply text-xl font-medium text-neutral-900 dark:text-neutral-100;
+  }
+  h5 {
+    @apply text-lg font-medium text-neutral-900 dark:text-neutral-100;
+  }
+  h6 {
+    @apply text-base font-medium text-neutral-900 dark:text-neutral-100;
+  }
+
+  /* Focus-visible – constant‑time ring for accessibility */
+  :focus-visible {
+    @apply outline-none ring-2 ring-primary-500;
+  }
+
+  /* Container – consistent horizontal padding (4 px base unit) */
+  .container {
+    @apply mx-auto px-4;
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                               Component Styles                              */
+/* -------------------------------------------------------------------------- */
+@layer components {
+  /* Buttons */
+  .btn {
+    @apply inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors
+      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 disabled:opacity-50 disabled:pointer-events-none;
+  }
+  .btn-primary {
+    @apply btn bg-primary-500 text-white hover:bg-primary-600;
+  }
+  .btn-secondary {
+    @apply btn bg-secondary-500 text-white hover:bg-secondary-600;
+  }
+  .btn-outline {
+    @apply btn border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-200
+      hover:bg-neutral-100 dark:hover:bg-neutral-800;
+  }
+
+  /* Card */
+  .card {
+    @apply bg-white dark:bg-neutral-800 rounded-lg shadow-md p-6;
+  }
+
+  /* Badges */
+  .badge {
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+  .badge-success {
+    @apply badge bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100;
+  }
+  .badge-warning {
+    @apply badge bg-yellow-100 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-100;
+  }
+  .badge-error {
+    @apply badge bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100;
+  }
+
+  /* Toast notifications */
+  .toast {
+    @apply fixed bottom-4 right-4 max-w-sm w-full bg-neutral-100 dark:bg-neutral-700 text-neutral-900 dark:text-neutral-100
+      rounded-lg shadow-lg p-4 flex items-start space-x-3;
+  }
+  .toast-success {
+    @apply toast border-l-4 border-green-500;
+  }
+  .toast-error {
+    @apply toast border-l-4 border-red-500;
+  }
+
+  /* Modal */
+  .modal {
+    @apply fixed inset-0 flex items-center justify-center bg-black bg-opacity-50;
+  }
+  .modal-content {
+    @apply bg-white dark:bg-neutral-800 rounded-lg shadow-xl max-w-lg w-full p-6;
+  }
+
+  /* Skeleton loader */
+  .skeleton {
+    @apply animate-pulse bg-neutral-200 dark:bg-neutral-700 rounded;
+  }
+
+  /* Switch (toggle) */
+  .switch {
+    @apply relative inline-flex h-6 w-11 items-center rounded-full;
+  }
+  .switch input {
+    @apply sr-only;
+  }
+  .switch .slider {
+    @apply block w-11 h-6 rounded-full bg-neutral-300 dark:bg-neutral-600;
+  }
+  .switch input:checked + .slider {
+    @apply bg-primary-500;
+  }
+  .switch .slider::before {
+    @apply content-[''] absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white transition-transform;
+  }
+  .switch input:checked + .slider::before {
+    @apply translate-x-5;
+  }
+
+  /* Table utilities – keep things tidy */
+  .table {
+    @apply min-w-full divide-y divide-neutral-200 dark:divide-neutral-700;
+  }
+  .table th,
+  .table td {
+    @apply px-4 py-2 text-left text-sm;
+  }
+  .table th {
+    @apply bg-neutral-100 dark:bg-neutral-800 font-medium text-neutral-600 dark:text-neutral-300;
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                               Utility Extensions                            */
+/* -------------------------------------------------------------------------- */
+@layer utilities {
+  /* Custom shadow that matches the design spec */
+  .shadow-md {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  }
+
+  /* Responsive typography scaling – mobile‑first */
+  @media (min-width: 640px) {
+    html {
+      font-size: 15px;
+    }
+  }
+  @media (min-width: 768px) {
+    html {
+      font-size: 16px;
+    }
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                               End of File                                   */
+/* -------------------------------------------------------------------------- */
